@@ -2,14 +2,20 @@ def next_agent_offer(
     driver_price: float,
     price_margin: float,
     agent_price: float,
-    concede_rate: float = 0.5,
-    min_step: float = 50.0,
-    epsilon: float = 1.0,
+    concede_rate: float = 0.5,   # how big each concession is toward target
+    min_step: float = 50.0,      # minimum movement per round
+    epsilon: float = 1.0,        # keeps us strictly below margin/driver ask
 ) -> float:
     """
-    Pure function: compute the next agent offer.
-    - Keeps final agreed price strictly below price_margin (by epsilon).
-    - Returns driver_price when it's acceptable (treat as acceptance upstream).
+    Compute the next agent offer with 'no auto-accept under margin' policy.
+
+    Inputs:
+      - driver_price: carrier's latest ask
+      - price_margin: strict upper bound (final price must be < price_margin)
+      - agent_price: agent's previous offer
+
+    Returns:
+      - next agent offer (float). If it equals driver_price, treat as acceptance upstream.
     """
     if price_margin <= 0:
         raise ValueError("price_margin must be > 0")
@@ -17,18 +23,26 @@ def next_agent_offer(
         raise ValueError("prices must be >= 0")
 
     cap = price_margin - epsilon
-    # Accept immediately if driver ask is already acceptable.
-    if driver_price <= cap:
+
+    # If the driver undercuts (or matches) our last offer, accept that great deal.
+    if driver_price <= agent_price:
         return float(driver_price)
 
-    # Otherwise, move toward the cap/driver ask with a bounded concession.
-    target = min(driver_price, cap)
-    gap = target - agent_price
-    # If no gap (or negative due to odd input), make a minimal nudge upward (but never exceed cap).
-    if gap <= 0:
-        return float(min(agent_price + min_step, cap))
+    # Normal path: NEVER auto-accept just because driver is under the margin.
+    # Set a target strictly below both the driver's ask and our hard cap.
+    target = min(driver_price - epsilon, cap)
 
+    # If target is at/below our last offer (e.g., tiny gap), nudge minimally but stay ≤ target.
+    gap = target - agent_price
+    if gap <= 0:
+        # We were already at/above target; nudge up a hair but keep under target if possible.
+        return float(min(agent_price + min_step, target))
+
+    # Concede toward target, but stay below driver ask and below cap.
     step = max(min_step, gap * concede_rate)
-    return float(min(agent_price + step, cap))
+    next_offer = agent_price + step
+
+    # Clamp to target to ensure we don't meet/exceed the driver's ask or cap.
+    return float(min(next_offer, target))
 
 

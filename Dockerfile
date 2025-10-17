@@ -10,7 +10,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 COPY .env.example ./.env.example
 
-# Railway sets $PORT; default to 8080 for local
 ENV PORT=8080
 CMD ["bash", "-lc", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]
 
